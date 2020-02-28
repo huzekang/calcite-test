@@ -4,10 +4,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 /**
- * @describer:
- * @author:fanzhihui
- * @Date:2019/6/19
- * @Time:9:16
+ * @describer: HrSchema定义了两个表
  */
 public class HrSchema {
     public final Employee[] emps;

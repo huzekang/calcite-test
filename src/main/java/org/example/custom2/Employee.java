@@ -1,11 +1,6 @@
 package org.example.custom2;
 
-/**
- * @describer:
- * @author:fanzhihui
- * @Date:2019/6/19
- * @Time:9:17
- */
+
 public class Employee {
     public final int empid;
     public final int deptno;

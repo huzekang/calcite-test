@@ -2,12 +2,7 @@ package org.example.custom2;
 
 import java.util.List;
 
-/**
- * @describer:
- * @author:fanzhihui
- * @Date:2019/6/19
- * @Time:9:40
- */
+
 public class Department {
     public final int deptno;
     public final String name;
