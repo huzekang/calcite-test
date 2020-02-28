@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "defaultSchema": "DAIP",
+  "schemas": [
+    {
+      "name": "DAIP",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.jdbc.JdbcSchema$Factory",
+      "operand": {
+        "jdbcDriver": "com.mysql.jdbc.Driver",
+        "jdbcUrl": "jdbc:mysql://localhost:3306/foodmart",
+        "jdbcUser": "root",
+        "jdbcPassword": "eWJmP7yvpccHCtmVb61Gxl2XLzIrRgmT"
+      }
+    }
+  ]
+}
