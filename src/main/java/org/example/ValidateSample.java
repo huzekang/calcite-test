@@ -8,21 +8,26 @@ import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.server.CalciteServerStatement;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlSelect;
+import org.apache.calcite.sql.dialect.MssqlSqlDialect;
 import org.apache.calcite.sql.dialect.MysqlSqlDialect;
 import org.apache.calcite.sql.dialect.OracleSqlDialect;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
+import org.apache.calcite.sql.validate.ListScope;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlValidator;
+import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.sql.validate.SqlValidatorNamespace;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.example.custom.Client;
 
+import javax.sound.midi.Soundbank;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.sql.Connection;
@@ -50,7 +55,7 @@ public class ValidateSample {
      * SqlParser调用create方法,从SqlParser.Config中获取工厂SqlParserImplFactory,并创建解析器
      * 调用SqlParser#parseQuery方法,解析SQL,最终调用SqlAbstractParserImpl(默认实现类SqlParserImpl)的parseSqlStmtEof或者parseSqlExpressionEof方法,获取解析后的抽象语法树SqlNode
      */
-    public static void main(String[] args) throws SqlParseException, SQLException, UnsupportedEncodingException {
+    public static void main(String[] args) throws SqlParseException, SQLException, UnsupportedEncodingException, NoSuchFieldException, IllegalAccessException {
         URL url = Client.class.getResource("/model2.json");
         String str = URLDecoder.decode(url.toString(), "UTF-8");
         Properties info = new Properties();
@@ -60,43 +65,70 @@ public class ValidateSample {
         CalcitePrepare.Context prepareContext = statement.createPrepareContext();
 
         // 解析配置 - mysql设置
-         SqlParser.Config mysqlConfig = SqlParser.configBuilder().setLex(Lex.MYSQL).build();
-         // 创建解析器
-         SqlParser parser = SqlParser.create("", mysqlConfig);
-         // Sql语句
-//        String sql = "SELECT s.STORE_NAME as saleName,f.STORE_COST as storeCost,f.STORE_SALES,p.PRODUCT_NAME,c.FNAME,c.LNAME  FROM sales_fact_sample f LEFT JOIN product p ON f.PRODUCT_ID = p.PRODUCT_ID LEFT JOIN customer c ON f.CUSTOMER_ID = c.CUSTOMER_ID LEFT JOIN store s ON f.STORE_ID = s.STORE_ID";
-        String sql = "SELECT STORE_ID as saleName  FROM sales_fact_sample f ";
-         // 解析sql
-         SqlNode sqlNode = parser.parseQuery(sql);
-         // 还原某个方言的SQL
-         System.out.println("\n方言的SQL ============= \n"+sqlNode.toSqlString(MysqlSqlDialect.DEFAULT));
+        SqlParser.Config mysqlConfig = SqlParser.configBuilder().setLex(Lex.MYSQL).build();
+        // 创建解析器
+        SqlParser parser = SqlParser.create("", mysqlConfig);
+        // Sql语句
+        String sql = "SELECT s.STORE_NAME as saleName,f.STORE_COST as storeCost,f.STORE_SALES,p.PRODUCT_NAME,c.FNAME,c.LNAME  FROM sales_fact_sample f LEFT JOIN product p ON f.PRODUCT_ID = p.PRODUCT_ID LEFT JOIN customer c ON f.CUSTOMER_ID = c.CUSTOMER_ID LEFT JOIN store s ON f.STORE_ID = s.STORE_ID";
+//        String sql = "SELECT STORE_ID as saleName  FROM sales_fact_sample f ";
+        // 解析sql
+        SqlNode sqlNode = parser.parseQuery(sql);
+        // 还原某个方言的SQL
+        System.out.println("\n方言的SQL ============= \n" + sqlNode.toSqlString(MssqlSqlDialect.DEFAULT));
 
-         // sql validate（会先通过Catalog读取获取相应的metadata和namespace）
-         SqlTypeFactoryImpl factory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
-         CalciteCatalogReader calciteCatalogReader = new CalciteCatalogReader(
-                 prepareContext.getRootSchema(),
-                 prepareContext.getDefaultSchemaPath(),
-                 factory,
-                 new CalciteConnectionConfigImpl(new Properties()));
+        // sql validate（会先通过Catalog读取获取相应的metadata和namespace）
+        SqlTypeFactoryImpl factory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
+        CalciteCatalogReader calciteCatalogReader = new CalciteCatalogReader(
+                prepareContext.getRootSchema(),
+                prepareContext.getDefaultSchemaPath(),
+                factory,
+                new CalciteConnectionConfigImpl(new Properties()));
         // 校验（包括对表名，字段名，函数名，字段类型的校验。）
-         SqlValidator validator = SqlValidatorUtil.newValidator(
-                 SqlStdOperatorTable.instance(),
-                 calciteCatalogReader,
-                 factory,
-                 SqlConformanceEnum.DEFAULT );
-         // 校验后的SqlNode
-         SqlNode validateSqlNode = validator.validate(sqlNode);
-         SqlValidatorScope selectScope = validator.getSelectScope((SqlSelect) validateSqlNode);
-         SqlValidatorNamespace namespace = validator.getNamespace(sqlNode);
-         System.out.println("\nvalidateSqlNode ============= \n"+validateSqlNode);
-         List<SqlMoniker> sqlMonikerList = new ArrayList<>();
-         selectScope.findAllColumnNames(sqlMonikerList);
-         System.out.println("\nselectScope ============= \n"+selectScope);
-         for (SqlMoniker sqlMoniker : sqlMonikerList) {
-            System.out.println(sqlMoniker.id()+"--->"+sqlMoniker);
-         }
-         System.out.println("\nnamespace ============= \n"+namespace);
-         System.out.println(namespace.fieldExists("nameCC"));
+        SqlValidator validator = SqlValidatorUtil.newValidator(
+                SqlStdOperatorTable.instance(),
+                calciteCatalogReader,
+                factory,
+                SqlConformanceEnum.DEFAULT);
+
+        // 校验后的SqlNode
+        SqlNode validateSqlNode = validator.validate(sqlNode);
+        final SqlValidatorImpl sqlValidator = (SqlValidatorImpl) validator;
+        // 反射获取私有属性tableScope
+        final Class<? extends SqlValidatorImpl> sqlValidatorClass = sqlValidator.getClass();
+        Field field = sqlValidatorClass.getDeclaredField("tableScope");
+        field.setAccessible(true);
+        Object o = field.get(sqlValidator);
+        // 获取用到的表
+        final List<SqlValidatorNamespace> children = ((ListScope) o).getChildren();
+        System.out.println("\n获取用到的表 ============= \n" );
+        for (SqlValidatorNamespace namespace : children) {
+            System.out.println(namespace.getNode().toString());
+        }
+
+
+        SqlValidatorScope selectScope = validator.getSelectScope((SqlSelect) validateSqlNode);
+        SqlValidatorNamespace namespace = validator.getNamespace(sqlNode);
+        System.out.println("\nvalidateSqlNode ============= \n" + validateSqlNode);
+        List<SqlMoniker> allColumnNames = new ArrayList<>();
+        List<SqlMoniker> aliases = new ArrayList<>();
+        selectScope.findAllColumnNames(allColumnNames);
+        selectScope.findAliases(aliases);
+        System.out.println("\nselectScope ============= \n" + selectScope);
+        System.out.println("\n 打印用到的所有表的字段 ============= \n");
+        for (SqlMoniker sqlMoniker : allColumnNames) {
+            System.out.println(sqlMoniker.id() + "--->" + sqlMoniker);
+        }
+        System.out.println("\n 打印用到的所有表别名 ============= \n");
+        for (SqlMoniker sqlMoniker : aliases) {
+            System.out.println(sqlMoniker.id() + "--->" + sqlMoniker);
+        }
+
+        System.out.println("\n 找出select语句中的字段和表的关联 ============= \n");
+        final String tableName = selectScope.findQualifyingTableName("PRODUCT_NAME", validateSqlNode).getValue().getTable().getQualifiedName().get(1);
+        System.out.println(tableName);
+
+        System.out.println("\nnamespace ============= \n" + namespace);
+        System.out.println(namespace.fieldExists("nameCC"));
 
     }
 
